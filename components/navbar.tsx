@@ -3,7 +3,7 @@
 import { signIn, useSession } from 'next-auth/react';
 import { motion } from 'framer-motion';
 import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Menu, Sparkles, X } from 'lucide-react';
 import { Button } from './ui/button';
 
 export const Navbar = () => {
@@ -83,12 +83,42 @@ export const Navbar = () => {
             <Button
               variant={'hero'}
               className="w-full font-semibold"
-              onClick={() => {}}
+              onClick={handleSubmit}
             >
               {session?.user ? 'Launch App' : 'Sign In'}
             </Button>
           </div>
+
+          <button
+            className="md:hidden text-foreground cursor-pointer"
+            onClick={() => setIsMobaileMenuOpen(!isMobaileMenuOpen)}
+          >
+            {isMobaileMenuOpen ? (
+              <X height={24} width={24} />
+            ) : (
+              <Menu height={24} width={24} />
+            )}
+          </button>
         </div>
+        <motion.div
+          initial={false}
+          animate={{
+            height: isMobaileMenuOpen ? 'auto' : '0',
+            opacity: isMobaileMenuOpen ? 1 : 0,
+          }}
+          className="md:hidden overflow-hidden"
+        >
+          <div className="py-4 space-y-4">
+            <button
+              onClick={() => {
+                scrollToSection('features');
+              }}
+              className="block w-full text-left text-foreground hover:text-primary transition-colors font-medium"
+            >
+              Features
+            </button>
+          </div>
+        </motion.div>
       </div>
     </motion.nav>
   );
