@@ -107,7 +107,7 @@ const BeforeAfterSlider = () => {
         transition={{
           delay: 1,
         }}
-        className="text-center mt-4 text-sm text-muted-foreground"
+        className='text-center mt-4 text-sm text-muted-foreground'
       >
         Drag the slider to see the magic✨
       </motion.p>
