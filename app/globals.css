@@ -1,5 +1,5 @@
 /* Tailwind v4 core */
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* ===== THEME TOKENS =====
    Map your old theme.extend.* into v4 tokens via @theme.
@@ -7,7 +7,7 @@
 */
 @theme {
   /* fonts */
-  --font-inter: "Inter", sans-serif;
+  --font-inter: 'Inter', sans-serif;
 
   /* radius */
   --radius: 1rem;
@@ -195,6 +195,7 @@
     box-shadow: var(--glow-secondary);
   }
 }
+
 @keyframes float {
   0%,
   100% {

@@ -2,7 +2,7 @@
 
 import { signIn, useSession } from 'next-auth/react';
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Menu, Sparkles, X } from 'lucide-react';
 import { Button } from './ui/button';
 
@@ -12,6 +12,16 @@ export const Navbar = () => {
   const [isMobaileMenuOpen, setIsMobaileMenuOpen] = useState(false);
 
   const { data: session } = useSession();
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   const scrollToSection = (sectionId: string) => {
     const ele = document.getElementById(sectionId) as HTMLDivElement;
@@ -38,7 +48,7 @@ export const Navbar = () => {
       animate={{ y: 0 }}
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? 'shadow-glass border-b border-card-border backdrop-blur-glass '
+          ? 'glass border-b border-card-border backdrop-blur-glass '
           : 'bg-transparent'
       }`}
     >
@@ -117,6 +127,21 @@ export const Navbar = () => {
             >
               Features
             </button>
+            <button
+              onClick={() => {
+                scrollToSection('pricing');
+              }}
+              className="block w-full text-left text-foreground hover:text-primary transition-colors font-medium"
+            >
+              Pricing
+            </button>
+            <Button
+              variant={'hero'}
+              className="w-full font-semibold"
+              onClick={handleSubmit}
+            >
+              {session?.user ? 'Launch App' : 'Sign In'}
+            </Button>
           </div>
         </motion.div>
       </div>
