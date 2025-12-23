@@ -1,10 +1,24 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import {
+  ImageKitInvalidRequestError,
+  ImageKitServerError,
+  ImageKitUploadNetworkError,
+  upload,
+} from '@imagekit/next';
 import { Crown, ImageIcon, Loader2, Upload, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { Plan } from '@prisma/client';
+import PaymentModal from './payment-modal';
 interface UploadZoneProps {
   onImageUpload: (imageUrl: string) => void;
+}
+
+interface GetUploadAuthParams {
+  token: string;
+  expire: number;
+  signature: string;
+  publicKey: string;
 }
 
 const UploadZone = ({ onImageUpload }: UploadZoneProps) => {
@@ -41,7 +55,65 @@ const UploadZone = ({ onImageUpload }: UploadZoneProps) => {
     handleFiles(files);
   }, []);
 
-  const handleFiles = useCallback((files: File[]) => {}, []);
+  const getUploadAuthParams = async (): Promise<GetUploadAuthParams> => {
+    const response = await fetch('/api/upload-auth');
+    if (!response.ok) {
+      throw new Error('Failed to fetch upload auth params');
+    }
+    const data = await response.json();
+    return data;
+  };
+
+  const uploadToImageKit = async (file: File): Promise<string> => {
+    try {
+      console.log('uploading', file);
+
+      const { token, signature, expire, publicKey } =
+        await getUploadAuthParams();
+
+      const result = await upload({
+        file,
+        fileName: file?.name,
+        folder: 'imaginex-photos',
+        expire,
+        token,
+        signature,
+        publicKey,
+        onProgress: (event) => {
+          console.log(`Upload progress : ${event.loaded}/${event.total}`);
+        },
+      });
+
+      return result.url || '';
+    } catch (error) {
+      if (error instanceof ImageKitInvalidRequestError) {
+        throw new Error('Invalid upload request');
+      } else if (error instanceof ImageKitServerError) {
+        throw new Error('ImageKit server error');
+      } else if (error instanceof ImageKitUploadNetworkError) {
+        throw new Error('Network error duing upload');
+      } else {
+        throw new Error('Failed to upload image');
+      }
+    }
+  };
+
+  const handleFiles = useCallback(async (files: File[]) => {
+    const imageFile = files.find((file) => file.type.startsWith('image/'));
+    if (!imageFile) return;
+    setIsUploading(true);
+    try {
+      await checkUsage();
+      await updateUsage();
+      const imageUrl = await uploadToImageKit(imageFile);
+      onImageUpload(imageUrl);
+      setUploadedImage(imageUrl);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setIsUploading(false);
+    }
+  }, []);
 
   const handleFileSelect = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -214,12 +286,15 @@ const UploadZone = ({ onImageUpload }: UploadZoneProps) => {
         </div>
       )}
       {/* Payment Modal */}
-      {/* {showPaymentModal && (
+      {showPaymentModal && (
         <PaymentModal
+          isOpen={showPaymentModal}
           onClose={() => setShowPaymentModal(false)}
-          onPaymentSuccess={() => setShowPaymentModal(false)}
+          onUpgrade={() => setShowPaymentModal(false)}
+          usageCount={usageData?.usageCount || 0}
+          usageLimit={usageData?.usageLimit || 0}
         />
-      )} */}
+      )}
     </motion.div>
   );
 };

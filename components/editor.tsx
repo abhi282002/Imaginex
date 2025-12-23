@@ -1,10 +1,22 @@
 'use client';
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Crop, Expand, Loader2, Scissors, Type, Zap } from 'lucide-react';
+import { motion, transformPropOrder } from 'framer-motion';
+import {
+  CheckCircle,
+  CheckCircleIcon,
+  Clock,
+  Crop,
+  Download,
+  Expand,
+  Loader2,
+  Scissors,
+  Type,
+  Zap,
+} from 'lucide-react';
 import UploadZone from './upload-zone';
 import { Button } from './ui/button';
 import CanvasEditor from './canvas-editor';
+import { getImageKitTransform } from '@/lib/transformkit';
 
 type JobStatus = 'idle' | 'queued' | 'processing' | 'completed' | 'error';
 
@@ -129,12 +141,156 @@ const Editor = () => {
     setCurrentJob(null);
   };
 
-  const handlePromptSubmit = () => {
+  const handlePromptSubmit = async () => {
+    if (!promptText.trim()) return;
+
+    const tool = allTools.find(
+      (tool) => tool?.hasPrompt && !activeEffects.has(tool.id),
+    );
+    if (!tool) return;
+
+    await applyEffect(tool.id, promptText);
     setShowPromptInput(false);
     setPromptText('');
   };
 
-  const handleToolClick = (toolId: string) => {};
+  const handleToolClick = async (toolId: string) => {
+    if (!uploadedImage) return;
+
+    const tool = allTools.find((tool) => tool.id === toolId);
+    if (!tool) return;
+    
+
+    //Toogle effect on/off
+    const newActiveEffects = new Set(activeEffects);
+    if (newActiveEffects.has(toolId)) {
+      newActiveEffects.delete(toolId);
+      setActiveEffects(newActiveEffects);
+
+      //remove effect from image
+      const remainingEffects = Array.from(newActiveEffects);
+
+      const newImageUrl =
+        remainingEffects.length > 0
+          ? `${uploadedImage}?tr=${remainingEffects
+              .map((effect) => getImageKitTransform(effect, promptText))
+              .join(',')}`
+          : uploadedImage;
+      setProcessingImage(newImageUrl);
+      return;
+    }
+
+    //Check the tools require prompt
+    if (tool.hasPrompt) {
+      setShowPromptInput(true);
+      setPromptText('');
+      return;
+    }
+
+    //Apply effect immediately
+    await applyEffect(toolId);
+  };
+
+  const applyEffect = async (toolId: string, prompt?: string) => {
+    if (!uploadedImage) return;
+    const newJob: ProcessingJob = {
+      id: Date.now().toString(),
+      type: toolId,
+      status: 'queued',
+      progress: 0,
+    };
+    setCurrentJob(newJob);
+    //Apply effect to active effects
+
+    const newActiveEffects = new Set(activeEffects);
+    newActiveEffects.add(toolId);
+    setActiveEffects(newActiveEffects);
+
+    const allEffects = Array.from(newActiveEffects);
+
+    const transforms = allEffects.map((effect) =>
+      getImageKitTransform(effect, effect === toolId ? promptText : undefined),
+    );
+
+    const newImageUrl = `${uploadedImage}?tr=${transforms.join(',')}`;
+
+    try {
+      //Start Polling the AI transformation URL to check it's complete
+      setCurrentJob((prev) =>
+        prev ? { ...prev, status: 'processing', progress: 10 } : null,
+      );
+
+      let attemps = 0;
+      const maxAttempts = 60;
+      const pollInternval = 5000;
+
+      const pollImageKit = async (): Promise<boolean> => {
+        attemps++;
+        try {
+          const response = await fetch(newImageUrl, {
+            method: 'HEAD',
+            cache: 'no-cache',
+          });
+          if (response.ok) {
+            //AI Transformation is complete
+            setProcessingImage(newImageUrl);
+            setCurrentJob((prev) =>
+              prev ? { ...prev, status: 'completed', progress: 100 } : null,
+            );
+            const completedJob = {
+              ...newJob,
+              status: 'completed' as JobStatus,
+              progress: 100,
+              results: newImageUrl,
+            };
+
+            setEditHistory((prev) => [...prev.slice(0, 2), completedJob]);
+            return true;
+          }
+        } catch (error) {
+          console.log('Polling Error', error);
+          return false;
+        }
+
+        const progress = Math.min(10 + attemps * 1.5, 90);
+        setCurrentJob((prev) => (prev ? { ...prev, progress } : null));
+
+        if (attemps >= maxAttempts) {
+          setProcessingImage(newImageUrl);
+          setCurrentJob((prev) =>
+            prev ? { ...prev, status: 'completed', progress: 100 } : null,
+          );
+          const completedJob = {
+            ...newJob,
+            status: 'completed' as JobStatus,
+            progress: 100,
+            results: newImageUrl,
+          };
+
+          setEditHistory((prev) => [...prev.slice(0, 2), completedJob]);
+          return true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, pollInternval));
+
+        return pollImageKit();
+      };
+
+      await pollImageKit();
+    } catch (error) {
+      console.log('Polling Error', error);
+      setCurrentJob((prev) =>
+        prev ? { ...prev, status: 'error', progress: 100 } : null,
+      );
+    }
+  };
+
+  const handleExport = (format: string) => {
+    if (!processingImage) return;
+    const link = document.createElement('a');
+    link.href = processingImage;
+    link.download = `imaginex${Date.now()}.${format}`;
+    link.click();
+  };
 
   return (
     <section id="editor" className="py-24 relative overflow-hidden">
@@ -367,7 +523,104 @@ const Editor = () => {
             }}
             className="lg:col-span-1"
           >
-            <div className="shadow-glass rounded-xl p-6 border border-gray-600"></div>
+            <div className="shadow-glass rounded-xl p-6 border border-gray-800">
+              <h3 className="text-lg font-semibold text-foreground mb-4">
+                Job Status
+              </h3>
+
+              {currentJob ? (
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-3">
+                    {currentJob.status === 'processing' ? (
+                      <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                    ) : currentJob.status === 'completed' ? (
+                      <CheckCircle className="w-5 h-5 text-primary" />
+                    ) : currentJob.status === 'queued' ? (
+                      <Clock className="w-5 h-5 text-primary" />
+                    ) : (
+                      <Clock className="w-5 h-5 text-primary" />
+                    )}
+                    <div>
+                      <p className="font-medium text-foreground capitalize">
+                        {allTools.find((t) => t.id === currentJob.type)?.name ||
+                          currentJob.type.replace('-', ' ')}
+                      </p>
+                      <p className="text-sm text-muted-foreground capitalize">
+                        {currentJob.status === 'queued' &&
+                          'Preparing AI transformation...'}
+                        {currentJob.status === 'processing' &&
+                          `Processing with AI (${currentJob.progress})`}
+                        {currentJob.status === 'error' &&
+                          'Something went wrong'}
+                      </p>
+                    </div>
+                  </div>
+                  {(currentJob.status === 'processing' ||
+                    currentJob.status === 'queued') && (
+                    <div className="w-full bg-muted rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          currentJob.status === 'queued'
+                            ? 'bg-muted-foreground animate-pulse'
+                            : 'bg-gradient-primary'
+                        }`}
+                        style={{
+                          width:
+                            currentJob.status === 'queued'
+                              ? '100%'
+                              : `${currentJob.progress}%`,
+                        }}
+                      />
+                      <div className="text-xs text-muted-foreground mt-1 text-center">
+                        {currentJob.status === 'queued' && 'Initializing...'}
+                        {currentJob.status === 'processing' &&
+                          'Waiting for AI to complete transfomration...'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Upload an image and select a tool to start
+                </p>
+              )}
+
+              {/* edit histor */}
+
+              {editHistory?.length > 0 && (
+                <div className="mt-8">
+                  <h4 className="text-sm font-semibold text-foreground mb-2">
+                    Recent Edits
+                  </h4>
+                  <div className="space-y-2">
+                    {editHistory.map((job) => (
+                      <div
+                        key={job.id}
+                        className="flex break-inside-avoid-column space-x-2 text-sm"
+                      >
+                        <CheckCircleIcon className="h-3 w-3 text-primary flex-shirnk-0" />
+                        <span className="text-muted-foreground capitalize">
+                          {job.type.replace('-', ' ')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Download Button */}
+              {processingImage && (
+                <div className="mt-6">
+                  <Button
+                    variant={'hero'}
+                    size={'sm'}
+                    onClick={() => handleExport('jpg')}
+                    className="glass w-full bg-background/20 border-foreground/20 text-foreground hover:bg-background/40"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                  </Button>
+                </div>
+              )}
+            </div>
           </motion.div>
         </div>
       </div>
