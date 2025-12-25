@@ -8,8 +8,9 @@ import {
 } from '@imagekit/next';
 import { Crown, ImageIcon, Loader2, Upload, X } from 'lucide-react';
 import { Button } from './ui/button';
-import { Plan } from '@prisma/client';
+
 import PaymentModal from './payment-modal';
+import { Plan } from '@prisma/client';
 interface UploadZoneProps {
   onImageUpload: (imageUrl: string) => void;
 }

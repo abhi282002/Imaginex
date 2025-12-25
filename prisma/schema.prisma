@@ -31,6 +31,7 @@ model User {
   email     String    @unique
   name      String
   avatar    String?
+  stripeCustomerId String?
   plan      Plan @default(Free)
   role      Role @default(User)
   usageCount Int     @default(0)

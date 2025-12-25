@@ -2,6 +2,8 @@
 import { getUploadAuthParams } from '@imagekit/next/server';
 import { NextResponse } from 'next/server';
 
+
+
 export async function GET() {
   // Your application logic to authenticate the user
   // For example, you can check if the user is logged in or has the necessary permissions
