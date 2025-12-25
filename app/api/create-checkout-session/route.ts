@@ -3,13 +3,6 @@ import { getToken } from 'next-auth/jwt';
 import Stripe from 'stripe';
 import prisma from '@/lib/prisma';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-12-15.clover',
-  appInfo: {
-    name: 'imaginex',
-  },
-});
-
 export async function POST(req: NextRequest) {
   try {
     const token = await getToken({ req });
@@ -24,6 +17,12 @@ export async function POST(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      apiVersion: '2025-12-15.clover',
+      appInfo: {
+        name: 'imaginex',
+      },
+    });
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
